@@ -6,7 +6,7 @@ from kivy import platform
 from kivy.app import App
 from kivy.core.window import Window
 from kivy.lang import Builder
-from kivy.properties import ObjectProperty
+from kivy.properties import OptionProperty, ColorProperty
 from kivy.utils import get_color_from_hex
 from traceback import format_exc
 
@@ -17,7 +17,7 @@ if platform == "android":
 
 Window.softinput_mode = "below_target"
 kv = """
-# kv_start
+#<KvLang>
 #:import KivyLexer kivy.extras.highlight.KivyLexer
 #:import get_color_from_hex kivy.utils.get_color_from_hex
 #:import ScrollEffect kivy.effects.scroll.ScrollEffect
@@ -35,7 +35,8 @@ BoxLayout:
         CodeInput:
             id: code
             text: app.sample_code
-            background_color: 1,1,1,1
+            background_color: app.light_background
+            foreground_color: app.light_foreground
             keyboard_suggestions: False
             size_hint_y: None
             height: max(self.minimum_height, sv.height)
@@ -63,25 +64,30 @@ BoxLayout:
             halign: "left"
             padding: 10, 10
             text_size: self.width, None
-            color: 0, 1, 0, 1
+            #background_normal: ''
+            color: get_color_from_hex('cccccc')
     BoxLayout:
         size_hint_y: 0.1
         Button:
             on_release: app.run_code(code.text, error)
-            text: 'Test your pyjinus code'
-            background_color: 0, 1, 0, 1
+            background_normal: ''
+            bold: True
+            text: 'Run pyjinus code'
+            background_color: get_color_from_hex('00AA66')
         Button:
             text: "Change editor color mode"
-            on_release: app.change_mode(code)
+            on_release: app.color_mode = "Dark" if app.color_mode == "Light" else "Light"
         
-# kv_end
+#</KvLang>
 """
 
 
 class PyjniusTester(App):
-    webview = ObjectProperty()
-
-    wvc = ObjectProperty()
+    color_mode = OptionProperty("Light", options=["Light", "Dark"])
+    light_background = ColorProperty("#e6e6e6")
+    dark_background = ColorProperty('#262626')
+    light_foreground = ColorProperty('#111111')
+    dark_foreground = ColorProperty('#eeeeee')
 
     sample_code = """from jnius import autoclass, cast
 from android.runnable import run_on_ui_thread
@@ -107,10 +113,9 @@ toast()
     def build(self):
         return Builder.load_string(kv)
 
-    @staticmethod
-    def change_mode(color):
-        color.background_color = [1, 1, 1, 1] if color.background_color == get_color_from_hex("3f3f3f") \
-            else get_color_from_hex("3f3f3f")
+    def on_color_mode(self, *args):
+        self.root.ids.code.background_color = self.light_background if self.color_mode == "Light" else self.dark_background
+        self.root.ids.code.foreground_color = self.light_foreground if self.color_mode == "Light" else self.dark_foreground
 
     @staticmethod
     def run_code(code, error):
