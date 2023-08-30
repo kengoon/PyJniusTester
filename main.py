@@ -18,7 +18,6 @@ if platform == "android":
 Window.softinput_mode = "below_target"
 kv = """
 #<KvLang>
-#:import KivyLexer kivy.extras.highlight.KivyLexer
 #:import get_color_from_hex kivy.utils.get_color_from_hex
 #:import ScrollEffect kivy.effects.scroll.ScrollEffect
 BoxLayout:
@@ -37,8 +36,8 @@ BoxLayout:
             text: app.sample_code
             background_color: app.light_background
             foreground_color: app.light_foreground
-            keyboard_suggestions: False
             size_hint_y: None
+            input_type: "text"
             height: max(self.minimum_height, sv.height)
     Label:
         text: "Code Logs"
@@ -64,8 +63,7 @@ BoxLayout:
             halign: "left"
             padding: 10, 10
             text_size: self.width, None
-            #background_normal: ''
-            color: get_color_from_hex('cccccc')
+            color: '#cccccc'
     BoxLayout:
         size_hint_y: 0.1
         Button:
@@ -73,7 +71,7 @@ BoxLayout:
             background_normal: ''
             bold: True
             text: 'Run pyjinus code'
-            background_color: get_color_from_hex('00AA66')
+            background_color: '#00AA66'
         Button:
             text: "Change editor color mode"
             on_release: app.color_mode = "Dark" if app.color_mode == "Light" else "Light"
