@@ -1,19 +1,43 @@
 import io
 import sys
-
-from jnius import autoclass
+from kivy.uix.codeinput import CodeInput
 from kivy import platform
 from kivy.app import App
 from kivy.core.window import Window
 from kivy.lang import Builder
-from kivy.properties import OptionProperty, ColorProperty
+from kivy.properties import OptionProperty, ColorProperty, BooleanProperty
 from kivy.utils import get_color_from_hex
 from traceback import format_exc
+from kivy.clock import Clock
+from datetime import datetime
+from os.path import join
 
 if platform == "android":
-    from android.runnable import run_on_ui_thread
-    activity = autoclass('org.kivy.android.PythonActivity').mActivity
 
+    from androidstorage4kivy import SharedStorage, Chooser
+    from android.runnable import run_on_ui_thread
+    from android import cast, autoclass, api_version, mActivity
+    activity = autoclass('org.kivy.android.PythonActivity').mActivity
+    AndroidString = autoclass('java.lang.String')
+    Toast = autoclass('android.widget.Toast')
+
+@run_on_ui_thread
+def toast(chars):
+    Toast.makeText(activity,cast('java.lang.CharSequence', AndroidString(chars)),
+        Toast.LENGTH_LONG
+    ).show()
+
+def get_app_name():
+    ''' 
+    get the title of the application (defined in spec file)
+    '''
+    context = mActivity.getApplicationContext()
+    appinfo = context.getApplicationInfo()
+    if appinfo.labelRes:
+        name = context.getString(appinfo.labelRes)
+    else:
+        name = appinfo.nonLocalizedLabel.toString()
+    return name
 
 Window.softinput_mode = "below_target"
 kv = """
@@ -31,7 +55,7 @@ BoxLayout:
     ScrollView:
         id: sv
         effect_cls: ScrollEffect
-        CodeInput:
+        MyCodeInput:
             id: code
             text: app.sample_code
             background_color: app.light_background
@@ -67,18 +91,48 @@ BoxLayout:
     BoxLayout:
         size_hint_y: 0.1
         Button:
-            on_release: app.run_code(code.text, error)
+            text: 'Run'
+            text_size: self.width, None
+            halign: 'center'
             background_normal: ''
             bold: True
-            text: 'Run pyjinus code'
             background_color: '#00AA66'
+            on_release: 
+                app.run_code(code.text, error)
+        Button
+            text: "Change color"
+            text_size: self.width, None
+            halign: 'center'
+            on_release: 
+                app.color_mode = "Dark" if app.color_mode == "Light" else "Light"
         Button:
-            text: "Change editor color mode"
-            on_release: app.color_mode = "Dark" if app.color_mode == "Light" else "Light"
+            text: "Open"
+            text_size: self.width, None
+            halign: 'center'
+            on_release: 
+                app.laoding_without_adding = True
+                app.storage4kivy_open()
+        Button:
+            text: "Add"
+            text_size: self.width, None
+            halign: 'center'
+            on_release: 
+                app.laoding_without_adding = False
+                app.storage4kivy_open()
+        Button:
+            text: "Save"
+            text_size: self.width, None
+            halign: 'center'
+            on_release: 
+                app.storage4kivy_save()
         
 #</KvLang>
 """
-
+class MyCodeInput(CodeInput):
+        
+    def on_triple_tap(self):
+        self.focus = True
+        Clock.schedule_once(lambda dt: self.select_all())
 
 class PyjniusTester(App):
     color_mode = OptionProperty("Light", options=["Light", "Dark"])
@@ -86,14 +140,15 @@ class PyjniusTester(App):
     dark_background = ColorProperty('#262626')
     light_foreground = ColorProperty('#111111')
     dark_foreground = ColorProperty('#eeeeee')
+    laoding_without_adding = BooleanProperty(True)
 
-    sample_code = """from jnius import autoclass, cast
+    sample_code = """from android import autoclass, cast
 from android.runnable import run_on_ui_thread
 Build = autoclass("android.os.Build")
 AndroidString = autoclass('java.lang.String')
 VERSION = autoclass("android.os.Build$VERSION")
 Device = Build.MANUFACTURER
-version = int(VERSION.RELEASE[0])
+version = int(VERSION.RELEASE[:])
 Toast = autoclass('android.widget.Toast')
 activity = autoclass("org.kivy.android.PythonActivity").mActivity
 
@@ -108,6 +163,69 @@ def toast():
 toast()
 """
 
+    def storage4kivy_open(self):
+        '''
+        Calls Android Chooser to pick a file and then chooser_callback
+        '''
+        if platform == "android":
+            Chooser(self.chooser_callback).choose_content()
+
+    def chooser_callback(self,uri_list):
+        reading = ""
+        '''
+        Using chooser from androidstorage4kivy to read file content.
+        Limits : Can retrieve only txt file, sure there is a way to
+        retrieve others extension files
+        '''
+        try:
+            ss = SharedStorage()
+            for uri in uri_list: # only one list
+                
+                # copy to private cache
+                path = ss.copy_from_shared(uri)
+
+                #read content from cache
+                try:
+                    with open(path,'r',encoding = 'utf-8') as fread:
+                        reading = fread.read()
+
+                    #Clock is needed otherwise throw thread error
+                    Clock.schedule_once(lambda dt: self.populate_label(reading))
+
+                except Exception as e:
+                    toast(f"1.cannot open file path : {str(path)}  because : {str(e)}")
+
+        except Exception as e:
+            toast("something wrong with package androidstorage4kivy" + str(e))
+
+    def populate_label(self,reading):
+
+        if self.laoding_without_adding:
+            self.root.ids.code.text = reading
+        else:
+            self.root.ids.code.text += "\n" + reading
+
+    def storage4kivy_save(self):
+        '''
+        Here the saving process could be optimize with 
+        a Chooser and a popup to enter the filename
+        '''
+
+        if platform == "android":
+            # 1. save file to private storage:
+            time = datetime.now().strftime("%d_%m_%d_%H_%M_%S")
+            file_name = "jnius_code_"+ time +".txt"
+            with open(join(".",file_name),'w',encoding= 'utf-8') as fwrite:
+                fwrite.write(self.root.ids.code.text)
+
+            #2. Copy the filename to sharedstorage in "Documents/appnamefolder/"
+            ss = SharedStorage()
+            shared = ss.copy_to_shared(file_name) #
+
+            #3. toast the saving path
+            app_name = get_app_name()
+            toast(f"File saved to Documents/{app_name}/{file_name}")
+            
     def build(self):
         return Builder.load_string(kv)
 
@@ -129,6 +247,5 @@ toast()
         except Exception as e:
             error.color = [1, 0, 0, 1]
             error.text = f"{str(format_exc())}\nMain error is....\n{e}"
-
 
 PyjniusTester().run()
