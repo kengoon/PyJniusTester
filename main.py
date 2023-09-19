@@ -21,23 +21,23 @@ if platform == "android":
     AndroidString = autoclass('java.lang.String')
     Toast = autoclass('android.widget.Toast')
 
-@run_on_ui_thread
-def toast(chars):
-    Toast.makeText(activity,cast('java.lang.CharSequence', AndroidString(chars)),
-        Toast.LENGTH_LONG
-    ).show()
-
-def get_app_name():
-    ''' 
-    get the title of the application (defined in spec file)
-    '''
-    context = mActivity.getApplicationContext()
-    appinfo = context.getApplicationInfo()
-    if appinfo.labelRes:
-        name = context.getString(appinfo.labelRes)
-    else:
-        name = appinfo.nonLocalizedLabel.toString()
-    return name
+    @run_on_ui_thread
+    def toast(chars):
+        Toast.makeText(activity,cast('java.lang.CharSequence', AndroidString(chars)),
+            Toast.LENGTH_LONG
+        ).show()
+    
+    def get_app_name():
+        ''' 
+        get the title of the application (defined in spec file)
+        '''
+        context = mActivity.getApplicationContext()
+        appinfo = context.getApplicationInfo()
+        if appinfo.labelRes:
+            name = context.getString(appinfo.labelRes)
+        else:
+            name = appinfo.nonLocalizedLabel.toString()
+        return name
 
 Window.softinput_mode = "below_target"
 kv = """
@@ -111,20 +111,20 @@ BoxLayout:
             halign: 'center'
             on_release: 
                 app.laoding_without_adding = True
-                app.storage4kivy_open()
+                app.open_file()
         Button:
             text: "Add"
             text_size: self.width, None
             halign: 'center'
             on_release: 
                 app.laoding_without_adding = False
-                app.storage4kivy_open()
+                app.open_file()
         Button:
             text: "Save"
             text_size: self.width, None
             halign: 'center'
             on_release: 
-                app.storage4kivy_save()
+                app.save_file()
         
 #</KvLang>
 """
@@ -163,14 +163,14 @@ def toast():
 toast()
 """
 
-    def storage4kivy_open(self):
+    def open_file(self):
         '''
         Calls Android Chooser to pick a file and then chooser_callback
         '''
         if platform == "android":
-            Chooser(self.chooser_callback).choose_content()
+            Chooser(lambda files: self.chooser_callback(files[0])).choose_content()
 
-    def chooser_callback(self,uri_list):
+    def chooser_callback(self,uri):
         reading = ""
         '''
         Using chooser from androidstorage4kivy to read file content.
@@ -179,24 +179,18 @@ toast()
         '''
         try:
             ss = SharedStorage()
-            for uri in uri_list: # only one list
-                
-                # copy to private cache
-                path = ss.copy_from_shared(uri)
+            # copy to private cache
+            path = ss.copy_from_shared(uri[0])
+            
+            #read content from cache
+            with open(path,'r',encoding = 'utf-8') as fread:
+                reading = fread.read()
 
-                #read content from cache
-                try:
-                    with open(path,'r',encoding = 'utf-8') as fread:
-                        reading = fread.read()
+            #Clock is needed otherwise throw thread error
+            Clock.schedule_once(lambda dt: self.populate_label(reading))
 
-                    #Clock is needed otherwise throw thread error
-                    Clock.schedule_once(lambda dt: self.populate_label(reading))
-
-                except Exception as e:
-                    toast(f"1.cannot open file path : {str(path)}  because : {str(e)}")
-
-        except Exception as e:
-            toast("something wrong with package androidstorage4kivy" + str(e))
+        except (FileNotFoundError, UnicodeError) as e:
+            toast(f"1.cannot open file path : {str(path)}  because : {str(e)}")
 
     def populate_label(self,reading):
 
@@ -205,7 +199,7 @@ toast()
         else:
             self.root.ids.code.text += "\n" + reading
 
-    def storage4kivy_save(self):
+    def save_file(self):
         '''
         Here the saving process could be optimize with 
         a Chooser and a popup to enter the filename
