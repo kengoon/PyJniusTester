@@ -33,11 +33,11 @@ if platform == "android":
         '''
         context = mActivity.getApplicationContext()
         appinfo = context.getApplicationInfo()
-        if appinfo.labelRes:
-            name = context.getString(appinfo.labelRes)
-        else:
-            name = appinfo.nonLocalizedLabel.toString()
-        return name
+        return (
+            context.getString(appinfo.labelRes)
+            if appinfo.labelRes
+            else appinfo.nonLocalizedLabel.toString()
+        )
 
 Window.softinput_mode = "below_target"
 kv = """
@@ -208,7 +208,7 @@ toast()
         if platform == "android":
             # 1. save file to private storage:
             time = datetime.now().strftime("%d_%m_%d_%H_%M_%S")
-            file_name = "jnius_code_"+ time +".txt"
+            file_name = f"jnius_code_{time}.txt"
             with open(join(".",file_name),'w',encoding= 'utf-8') as fwrite:
                 fwrite.write(self.root.ids.code.text)
 
