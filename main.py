@@ -1,16 +1,26 @@
 import io
 import sys
+import threading
+
+from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.codeinput import CodeInput
 from kivy import platform
 from kivy.app import App
 from kivy.core.window import Window
 from kivy.lang import Builder
 from kivy.properties import OptionProperty, ColorProperty, BooleanProperty
+from kivy.uix.popup import Popup
+from kivymd.app import MDApp
+from kivymd.uix.button import MDTextButton
+from kivymd.uix.textfield import MDTextField
 from kivy.utils import get_color_from_hex
+from kivy.uix.label import Label
 from traceback import format_exc
 from kivy.clock import Clock
 from datetime import datetime
 from os.path import join
+
+from client import SharedCode
 
 if platform == "android":
 
@@ -125,6 +135,12 @@ BoxLayout:
             halign: 'center'
             on_release: 
                 app.save_file()
+        Button:
+            text: "Connect to pc"
+            text_size: self.width, None
+            halign: 'center'
+            on_release:
+                app.connection_dialog()
         
 #</KvLang>
 """
@@ -134,7 +150,25 @@ class MyCodeInput(CodeInput):
         self.focus = True
         Clock.schedule_once(lambda dt: self.select_all())
 
-class PyjniusTester(App):
+class ConnectionBox(BoxLayout):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.orientation = 'vertical'
+
+        host_input = MDTextField(mode="rectangle", hint_text="Ip address")
+        port_input = MDTextField(mode="rectangle", hint_text="Port")
+        self.add_widget(host_input)
+        self.add_widget(port_input)
+
+        sub_container = BoxLayout(orientation='horizontal')
+        accept_button = MDTextButton(text="Accept", color='blue', on_release=lambda x: threading.Thread(
+            target=lambda: TesterApp.rewire_data(host=host_input.text, port=port_input.text)
+        ).start())
+        sub_container.add_widget(accept_button)
+        self.add_widget(sub_container)
+
+
+class PyjniusTester(MDApp):
     color_mode = OptionProperty("Light", options=["Light", "Dark"])
     light_background = ColorProperty("#e6e6e6")
     dark_background = ColorProperty('#262626')
@@ -162,6 +196,22 @@ def toast():
         ).show()
 toast()
 """
+
+    def connection_dialog(self):
+        connection_dialog = Popup(title='Test popup', size_hint_y = 0.5, content=ConnectionBox())
+        connection_dialog.open()
+
+    def update_code(self, operator):
+        self.root.ids['code'].text = operator.get_data()
+
+    def rewire_data(self, host, port):
+        operator = SharedCode(host, port)
+        print("in")
+        while True:
+            operator.data_pull()
+            Clock.schedule_once(lambda x: self.update_code(operator), 0.1)
+
+
 
     def open_file(self):
         '''
@@ -241,5 +291,5 @@ toast()
         except Exception as e:
             error.color = [1, 0, 0, 1]
             error.text = f"{str(format_exc())}\nMain error is....\n{e}"
-
-PyjniusTester().run()
+TesterApp = PyjniusTester()
+TesterApp.run()
